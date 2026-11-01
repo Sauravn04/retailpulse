@@ -1,0 +1,26 @@
+# Python / venv
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.log
+
+# Secrets / local config
+.env
+
+# Raw data — large, re-downloadable, never committed
+data/raw/
+*.zip
+*.csv
+!data/raw/README.md
+
+# Generated artefacts — rebuilt by scripts
+exports/
+models/
+data/*.json
+data/*.csv
+
+# OS / editor
+.DS_Store
+.vscode/
+.pytest_cache/
