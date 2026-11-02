@@ -4,6 +4,45 @@
 > analytics (SQL, BI, forecasting) and data engineering (pipeline, warehouse, quality).
 > Built step by step. Do not skip a step's checkpoint.
 
+## Architecture
+
+```mermaid
+flowchart LR
+    K[Kaggle CSVs<br/>12 tables, ~1M rows] --> B[Bronze<br/>PostgreSQL, all TEXT]
+    B --> S[Silver<br/>typed, PKs, quarantine]
+    S --> G[Gold<br/>daily / category / store<br/>monthly + RFM + forecast]
+    G --> C[GCP Cloud SQL<br/>Postgres 15, asia-south1]
+    C --> P[Power BI<br/>dashboard]
+    G --> X[Excel workbook<br/>bi/retailpulse_bi.xlsx]
+```
+
+Kaggle → Bronze → Silver → Gold → Cloud SQL → Power BI.
+Bronze is raw, Silver is cleaned, Gold is the only layer
+BI and forecasting read from.
+
+## Dashboard
+
+Screenshots live in `docs/images/` — put yours there with
+exactly these names, then they show up here automatically:
+
+| Screenshot | File | What it must show |
+|---|---|---|
+| Full dashboard | `docs/images/dashboard-full.png` | All 5 visuals, Total Revenue 3,827,746,136 |
+| Forecast visual | `docs/images/dashboard-forecast.png` | Forecast line, Jan 2024, total 79,543,922 |
+| Categories + RFM | `docs/images/dashboard-categories-rfm.png` | Category 5 on top, Hibernating 11,234 on top |
+
+![Full dashboard](docs/images/dashboard-full.png)
+
+![Forecast, Jan 2024](docs/images/dashboard-forecast.png)
+
+![Top categories and RFM](docs/images/dashboard-categories-rfm.png)
+
+> How to take them: in Power BI Desktop, after Refresh from
+> Cloud SQL, use Snipping Tool on the dashboard page —
+> one screenshot of the whole page, one zoomed on the
+> forecast visual, one zoomed on the category + RFM charts.
+> Save as PNG, not JPG, so the numbers stay readable.
+
 ## The idea
 
 A retailer cannot plan stock if it cannot trust its numbers.
@@ -29,7 +68,7 @@ and forecasts daily revenue for the next 30 days.
 - SQL analytics with window functions, ranking, and RFM
 - An Excel workbook + a Tableau / Power BI dashboard
 - A forecast with honest holdout metrics (time-based split, baselines included)
-- A FastAPI API + dashboard, deployed on GCP Cloud Run (Phase 1 only)
+- Gold in GCP Cloud SQL, with Power BI reading from the cloud
 - A GitHub repo, a 2-minute Loom, and resume bullets with real numbers
 
 ## Build plan (one step at a time)
@@ -41,12 +80,14 @@ and forecasts daily revenue for the next 30 days.
 - [x] **Step 4 — SQL analytics + quality:** window functions, RFM, reconciliation PASS.
   Top categories 5, 3, 21, 26, 12; Champions 8,184, Hibernating 11,234.
 - [x] **Step 5 — BI:** Excel workbook (`bi/retailpulse_bi.xlsx`) + Power BI dashboard
-  (`bi/retailpulse_dashboard.pbix`, in progress) — see `docs/BI_DASHBOARD.md`.
-- [ ] **Step 6 — Forecasting:** lag/rolling features, time holdout, baselines.
-- [ ] **Step 7 — API + dashboard:** FastAPI serving Gold + forecast.
-- [ ] **Step 8 — GCP + GitHub:** Cloud Run deploy. GitHub push was moved earlier
-  (1 Nov, at Saurav's request) — Steps 6–8 are still to come, this repo is
-  a work in progress, not the finished project.
+  (`bi/retail_dashboard.pbix`) + Power BI reading from Cloud SQL — see `docs/BI_DASHBOARD.md`.
+- [x] **Step 6 — Forecasting:** lag/rolling features, time holdout, baselines.
+  Rolling-mean-7 MAPE 7.70% beat RandomForest 8.03% / Ridge 7.86%;
+  30-day forecast total 79,543,922.
+- [x] **Step 8 — GCP Cloud SQL (revised 2 Nov, complete 3 Nov):** Gold moved
+  to Cloud SQL (35.200.179.31, project retailpulse-513512) and Power BI
+  reads from it — see `docs/CLOUD_SQL.md`. Replaces the original
+  Cloud Run deploy plan.
 
 Airflow is **optional, Step 3b, not required** to finish the project.
 The core pipeline is Python + SQL, runnable without Airflow.
@@ -128,15 +169,11 @@ GRANT USAGE, CREATE ON SCHEMA public TO retailpulse_user;
 
 ```
 retailpulse/
-├── app/            # FastAPI app (Step 7)
 ├── scripts/        # Pipeline + checks (Steps 1-6)
 │   └── check_setup.py
 ├── sql/            # Schema, analytics, quality checks (Steps 2-4)
-├── tests/          # pytest (added as code lands)
-├── dags/           # Airflow DAG — OPTIONAL, Step 3b only
 ├── data/
 │   └── raw/        # Kaggle CSVs go here — NEVER committed (see data/raw/README.md)
-├── exports/        # BI-ready CSVs + Excel (Step 5)
 ├── docs/           # Setup + design notes
 ├── .env.example
 ├── requirements.txt

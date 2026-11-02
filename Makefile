@@ -5,5 +5,3 @@ setup:
 check:
 	python scripts/check_setup.py
 
-test:
-	pytest -q

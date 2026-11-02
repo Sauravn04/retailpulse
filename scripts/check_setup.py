@@ -13,7 +13,7 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
-REQUIRED = ["pandas", "numpy", "sqlalchemy", "psycopg2", "sklearn", "fastapi", "dotenv"]
+REQUIRED = ["pandas", "numpy", "sqlalchemy", "psycopg2", "sklearn", "dotenv"]
 
 
 def main():
