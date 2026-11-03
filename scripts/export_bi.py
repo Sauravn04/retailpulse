@@ -14,6 +14,7 @@ What it does
 Needs: DATABASE_URL in .env, Postgres running, Steps 3b + 4 done.
 Exit 0 = workbook written and totals reconcile.
 """
+
 import csv
 import os
 import sys
@@ -58,33 +59,39 @@ def main() -> int:
                     "SELECT order_date, revenue, orders, quantity, "
                     "rolling_7d_revenue, rolling_30d_revenue, wow_pct, "
                     "cumulative_revenue FROM gold.v_daily_trend "
-                    "ORDER BY order_date"),
+                    "ORDER BY order_date"
+                ),
                 "Monthly_Trend": (
                     "SELECT month, revenue, orders, quantity, mom_pct, "
                     "rolling_3m_revenue, cumulative_revenue "
-                    "FROM gold.v_monthly_trend ORDER BY month"),
+                    "FROM gold.v_monthly_trend ORDER BY month"
+                ),
                 "Top_Categories": (
                     "SELECT category_id, revenue, quantity, "
                     "revenue_share_pct, revenue_rank, "
                     "cumulative_share_pct FROM gold.v_top_categories "
-                    "ORDER BY revenue_rank"),
+                    "ORDER BY revenue_rank"
+                ),
                 "Top_Stores": (
                     "SELECT store_id, revenue, quantity, "
                     "revenue_share_pct, revenue_rank, "
                     "cumulative_share_pct FROM gold.v_top_stores "
-                    "ORDER BY revenue_rank"),
+                    "ORDER BY revenue_rank"
+                ),
                 "RFM_Segments": (
                     "SELECT segment, count(*) AS customers, "
                     "ROUND(AVG(monetary), 2) AS avg_monetary, "
                     "ROUND(AVG(frequency), 2) AS avg_frequency, "
                     "ROUND(AVG(recency_days), 1) AS avg_recency_days "
                     "FROM gold.rfm_customers GROUP BY segment "
-                    "ORDER BY customers DESC"),
+                    "ORDER BY customers DESC"
+                ),
                 "RFM_Customers": (
                     "SELECT customer_id, last_order_date, recency_days, "
                     "frequency, monetary, r_score, f_score, m_score, "
                     "rfm_code, segment FROM gold.rfm_customers "
-                    "ORDER BY monetary DESC"),
+                    "ORDER BY monetary DESC"
+                ),
             }
             data = {}
             for name, sql in tables.items():
@@ -93,23 +100,23 @@ def main() -> int:
                 print(f"  {name}: {len(rows):,} rows")
 
             # Data-quality numbers for the Dashboard sheet.
-            cur.execute("SELECT count(*) FROM quarantine.bad_rows "
-                        "WHERE stage='silver'")
+            cur.execute(
+                "SELECT count(*) FROM quarantine.bad_rows " "WHERE stage='silver'"
+            )
             quarantined = cur.fetchone()[0]
             cur.execute(
                 "SELECT count(*) FROM silver.customers c "
                 "WHERE NOT EXISTS (SELECT 1 FROM silver.orders o "
-                "WHERE o.customer_id = c.customer_id)")
+                "WHERE o.customer_id = c.customer_id)"
+            )
             no_orders = cur.fetchone()[0]
-            cur.execute("SELECT COALESCE(SUM(revenue), 0) "
-                        "FROM gold.daily_sales")
+            cur.execute("SELECT COALESCE(SUM(revenue), 0) " "FROM gold.daily_sales")
             total_revenue = int(cur.fetchone()[0])
     finally:
         conn.close()
 
     if total_revenue != EXPECTED_REVENUE:
-        print(f"[FAIL] total revenue {total_revenue:,} != "
-              f"{EXPECTED_REVENUE:,}")
+        print(f"[FAIL] total revenue {total_revenue:,} != " f"{EXPECTED_REVENUE:,}")
         return 1
 
     wb = Workbook()
@@ -124,21 +131,31 @@ def main() -> int:
     dashboard = [
         ("Total revenue (2020-01-01 to 2024-01-01)", total_revenue),
         ("Mean daily revenue", round(total_revenue / 1462, 2)),
-        ("Top category", f"category {top_cat[0]} — {int(top_cat[1]):,} "
-         f"({top_cat[3]}% of revenue)"),
-        ("Top store", f"store {top_store[0]} — {int(top_store[1]):,} "
-         f"({top_store[3]}% of revenue)"),
-        ("Top 5 categories share of revenue",
-         "see Top_Categories — cumulative share at rank 5"),
+        (
+            "Top category",
+            f"category {top_cat[0]} — {int(top_cat[1]):,} "
+            f"({top_cat[3]}% of revenue)",
+        ),
+        (
+            "Top store",
+            f"store {top_store[0]} — {int(top_store[1]):,} "
+            f"({top_store[3]}% of revenue)",
+        ),
+        (
+            "Top 5 categories share of revenue",
+            "see Top_Categories — cumulative share at rank 5",
+        ),
         ("Champions (RFM)", rfm.get("Champions", 0)),
         ("Hibernating (RFM)", rfm.get("Hibernating", 0)),
         ("At Risk (RFM)", rfm.get("At Risk", 0)),
         ("Customers with no orders", no_orders),
         ("Quarantined rows in Silver", quarantined),
-        ("Note: Jan 2024 is a 1-day partial month — its MoM is meaningless.",
-         ""),
-        ("Source: gold.* in PostgreSQL. Rebuild with: "
-         "python scripts/export_bi.py", ""),
+        ("Note: Jan 2024 is a 1-day partial month — its MoM is meaningless.", ""),
+        (
+            "Source: gold.* in PostgreSQL. Rebuild with: "
+            "python scripts/export_bi.py",
+            "",
+        ),
     ]
     for i, (label, value) in enumerate(dashboard, start=3):
         ws.cell(row=i, column=1, value=label)
@@ -151,8 +168,7 @@ def main() -> int:
         sh = wb.create_sheet(name)
         sh.append(cols)
         for r in rows:
-            sh.append([c.isoformat() if isinstance(c, date) else c
-                       for c in r])
+            sh.append([c.isoformat() if isinstance(c, date) else c for c in r])
         for cell in sh[1]:
             cell.font = Font(bold=True)
         sh.freeze_panes = "A2"
@@ -168,12 +184,14 @@ def main() -> int:
     line.x_axis.title = "Day"
     line.height = 7.5
     line.width = 15
-    line.add_data(Reference(daily, min_col=2, min_row=1,
-                            max_row=1 + len(data["Daily_Trend"][1])),
-                  titles_from_data=True)
-    line.add_data(Reference(daily, min_col=5, min_row=1,
-                            max_row=1 + len(data["Daily_Trend"][1])),
-                  titles_from_data=True)
+    line.add_data(
+        Reference(daily, min_col=2, min_row=1, max_row=1 + len(data["Daily_Trend"][1])),
+        titles_from_data=True,
+    )
+    line.add_data(
+        Reference(daily, min_col=5, min_row=1, max_row=1 + len(data["Daily_Trend"][1])),
+        titles_from_data=True,
+    )
     daily.add_chart(line, "J2")
 
     cats = wb["Top_Categories"]
@@ -183,8 +201,9 @@ def main() -> int:
     bar.y_axis.title = "Revenue"
     bar.height = 7.5
     bar.width = 15
-    bar.add_data(Reference(cats, min_col=2, min_row=1, max_row=31),
-                 titles_from_data=True)
+    bar.add_data(
+        Reference(cats, min_col=2, min_row=1, max_row=31), titles_from_data=True
+    )
     bar.set_categories(Reference(cats, min_col=1, min_row=2, max_row=31))
     cats.add_chart(bar, "H2")
 
@@ -196,10 +215,11 @@ def main() -> int:
     rbar.height = 7.5
     rbar.width = 15
     n_seg = len(data["RFM_Segments"][1])
-    rbar.add_data(Reference(rfm_sh, min_col=2, min_row=1, max_row=1 + n_seg),
-                  titles_from_data=True)
-    rbar.set_categories(Reference(rfm_sh, min_col=1, min_row=2,
-                                  max_row=1 + n_seg))
+    rbar.add_data(
+        Reference(rfm_sh, min_col=2, min_row=1, max_row=1 + n_seg),
+        titles_from_data=True,
+    )
+    rbar.set_categories(Reference(rfm_sh, min_col=1, min_row=2, max_row=1 + n_seg))
     rfm_sh.add_chart(rbar, "H2")
 
     wb.save(XLSX)

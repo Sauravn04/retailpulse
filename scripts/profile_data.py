@@ -38,6 +38,7 @@ check that had its inputs present passed; 1 otherwise.
 A missing core file is a FAIL — download the full Kaggle set
 before running Step 3.
 """
+
 import json
 import os
 import sys
@@ -66,8 +67,15 @@ EXPECTED_DAYS = 1_462
 EXPECTED_DATE_MIN = "2020-01-01"
 EXPECTED_DATE_MAX = "2024-01-01"
 
-CORE_FILES = ["categories", "stores", "products", "customers",
-              "orders", "order_items", "payments"]
+CORE_FILES = [
+    "categories",
+    "stores",
+    "products",
+    "customers",
+    "orders",
+    "order_items",
+    "payments",
+]
 
 
 def _profile_one(path):
@@ -104,36 +112,46 @@ def _profile_one(path):
 
 
 def _check(results, name, passed, actual, expected, note=""):
-    results.append({
-        "check": name,
-        "status": "PASS" if passed else "FAIL",
-        "actual": actual,
-        "expected": expected,
-        "note": note,
-    })
-    print(f"  [{'PASS' if passed else 'FAIL'}] {name}: "
-          f"actual={actual} expected={expected} {note}")
+    results.append(
+        {
+            "check": name,
+            "status": "PASS" if passed else "FAIL",
+            "actual": actual,
+            "expected": expected,
+            "note": note,
+        }
+    )
+    print(
+        f"  [{'PASS' if passed else 'FAIL'}] {name}: "
+        f"actual={actual} expected={expected} {note}"
+    )
 
 
 def main():
     print("RetailPulse — Step 2 profile")
     print(f"Reading CSVs from {RAW_DIR}/")
     if not os.path.isdir(RAW_DIR):
-        print(f"[FAIL] {RAW_DIR} does not exist — download the Kaggle "
-              "dataset first (see data/raw/README.md).")
+        print(
+            f"[FAIL] {RAW_DIR} does not exist — download the Kaggle "
+            "dataset first (see data/raw/README.md)."
+        )
         return 1
 
-    files = sorted(f for f in os.listdir(RAW_DIR)
-                   if f.lower().endswith(".csv"))
+    files = sorted(f for f in os.listdir(RAW_DIR) if f.lower().endswith(".csv"))
     if not files:
-        print("[FAIL] No CSVs in data/raw/ — download the Kaggle "
-              "dataset first (see data/raw/README.md).")
+        print(
+            "[FAIL] No CSVs in data/raw/ — download the Kaggle "
+            "dataset first (see data/raw/README.md)."
+        )
         return 1
 
     print(f"Found {len(files)} CSV file(s): {', '.join(files)}")
     tables = {}
-    report = {"generated_at": datetime.now().isoformat(timespec="seconds"),
-              "files": {}, "checks": []}
+    report = {
+        "generated_at": datetime.now().isoformat(timespec="seconds"),
+        "files": {},
+        "checks": [],
+    }
     ok = True
 
     for fname in files:
@@ -141,24 +159,33 @@ def main():
         name = os.path.splitext(fname)[0]
         tables[name] = df
         report["files"][name] = summary
-        print(f"  {fname}: {summary['rows']:,} rows, "
-              f"{summary['column_count']} cols, "
-              f"{summary['null_total']:,} nulls, "
-              f"{summary['duplicate_full_rows']:,} duplicate rows")
+        print(
+            f"  {fname}: {summary['rows']:,} rows, "
+            f"{summary['column_count']} cols, "
+            f"{summary['null_total']:,} nulls, "
+            f"{summary['duplicate_full_rows']:,} duplicate rows"
+        )
 
     # --- Missing / extra files -------------------------------------------
     present = set(tables)
     missing = [c for c in CORE_FILES if c not in present]
     extra = sorted(present - set(CORE_FILES))
     print("\nCore-file check:")
-    _check(report["checks"], "core_files_present", not missing,
-           f"{len(CORE_FILES) - len(missing)}/{len(CORE_FILES)} present",
-           "all 7 core files", f"missing: {missing}" if missing else "")
+    _check(
+        report["checks"],
+        "core_files_present",
+        not missing,
+        f"{len(CORE_FILES) - len(missing)}/{len(CORE_FILES)} present",
+        "all 7 core files",
+        f"missing: {missing}" if missing else "",
+    )
     if extra:
-        print(f"  [INFO] Extra file(s) beyond the 7 core tables: {extra} "
-              "— these are the remaining Kaggle tables. "
-              "Record their columns in docs/DESIGN.md; do not invent "
-              "a use for them until profiled.")
+        print(
+            f"  [INFO] Extra file(s) beyond the 7 core tables: {extra} "
+            "— these are the remaining Kaggle tables. "
+            "Record their columns in docs/DESIGN.md; do not invent "
+            "a use for them until profiled."
+        )
     if missing:
         ok = False
 
@@ -180,22 +207,41 @@ def main():
         dmin, dmax = dates.min(), dates.max()
         ndays = int(dates.dt.date.nunique())
         span = (dmax - dmin).days + 1 if pd.notna(dmin) and pd.notna(dmax) else None
-        _check(report["checks"], "orders_date_range",
-               str(dmin.date()) == EXPECTED_DATE_MIN
-               and str(dmax.date()) == EXPECTED_DATE_MAX,
-               f"{dmin.date()} to {dmax.date()}",
-               f"{EXPECTED_DATE_MIN} to {EXPECTED_DATE_MAX}")
-        _check(report["checks"], "orders_distinct_days", ndays == EXPECTED_DAYS,
-               ndays, EXPECTED_DAYS)
+        _check(
+            report["checks"],
+            "orders_date_range",
+            str(dmin.date()) == EXPECTED_DATE_MIN
+            and str(dmax.date()) == EXPECTED_DATE_MAX,
+            f"{dmin.date()} to {dmax.date()}",
+            f"{EXPECTED_DATE_MIN} to {EXPECTED_DATE_MAX}",
+        )
+        _check(
+            report["checks"],
+            "orders_distinct_days",
+            ndays == EXPECTED_DAYS,
+            ndays,
+            EXPECTED_DAYS,
+        )
         if span is not None:
             passed = span - ndays == 0
             if not passed:
                 ok = False
-            _check(report["checks"], "orders_no_missing_days", passed,
-                   span - ndays, 0, "missing calendar days in orders")
+            _check(
+                report["checks"],
+                "orders_no_missing_days",
+                passed,
+                span - ndays,
+                0,
+                "missing calendar days in orders",
+            )
         bad_dates = int(dates.isna().sum())
-        _check(report["checks"], "orders_no_unparseable_dates",
-               bad_dates == 0, bad_dates, 0)
+        _check(
+            report["checks"],
+            "orders_no_unparseable_dates",
+            bad_dates == 0,
+            bad_dates,
+            0,
+        )
 
     # --- Joins + revenue / payments ---------------------------------------
     if "orders" in tables and "order_items" in tables:
@@ -203,17 +249,32 @@ def main():
         orders, items = tables["orders"], tables["order_items"]
         if "order_id" in orders.columns and "order_id" in items.columns:
             unmatched_orders = int(
-                (~items["order_id"].isin(set(orders["order_id"])) ).sum())
-            _check(report["checks"], "order_items_unmatched_to_orders",
-                   unmatched_orders == 0, unmatched_orders, 0)
+                (~items["order_id"].isin(set(orders["order_id"]))).sum()
+            )
+            _check(
+                report["checks"],
+                "order_items_unmatched_to_orders",
+                unmatched_orders == 0,
+                unmatched_orders,
+                0,
+            )
             if unmatched_orders:
                 ok = False
-        if "product_id" in items.columns and "products" in tables \
-                and "product_id" in tables["products"].columns:
+        if (
+            "product_id" in items.columns
+            and "products" in tables
+            and "product_id" in tables["products"].columns
+        ):
             unmatched_prod = int(
-                (~items["product_id"].isin(set(tables["products"]["product_id"]))).sum())
-            _check(report["checks"], "order_items_unmatched_to_products",
-                   unmatched_prod == 0, unmatched_prod, 0)
+                (~items["product_id"].isin(set(tables["products"]["product_id"]))).sum()
+            )
+            _check(
+                report["checks"],
+                "order_items_unmatched_to_products",
+                unmatched_prod == 0,
+                unmatched_prod,
+                0,
+            )
             if unmatched_prod:
                 ok = False
         if {"qty", "price"}.issubset(items.columns):
@@ -221,14 +282,23 @@ def main():
             passed = abs(revenue - EXPECTED_REVENUE) < 1.0
             if not passed:
                 ok = False
-            _check(report["checks"], "revenue_qty_x_price", passed,
-                   round(revenue), EXPECTED_REVENUE,
-                   "qty*price only — never payments")
+            _check(
+                report["checks"],
+                "revenue_qty_x_price",
+                passed,
+                round(revenue),
+                EXPECTED_REVENUE,
+                "qty*price only — never payments",
+            )
             neg_qty = int((items["qty"] <= 0).sum()) if "qty" in items else 0
             neg_price = int((items["price"] < 0).sum())
-            _check(report["checks"], "order_items_no_bad_qty_price",
-                   neg_qty == 0 and neg_price == 0,
-                   f"qty<=0:{neg_qty} price<0:{neg_price}", "qty<=0:0 price<0:0")
+            _check(
+                report["checks"],
+                "order_items_no_bad_qty_price",
+                neg_qty == 0 and neg_price == 0,
+                f"qty<=0:{neg_qty} price<0:{neg_price}",
+                "qty<=0:0 price<0:0",
+            )
 
     if "payments" in tables and "amount" in tables["payments"].columns:
         print("\nPayments check (reconciliation only):")
@@ -236,15 +306,29 @@ def main():
         passed = abs(total - EXPECTED_PAYMENTS) < 1.0
         if not passed:
             ok = False
-        _check(report["checks"], "payments_total", passed,
-               round(total), EXPECTED_PAYMENTS,
-               "DIFFERENT from revenue — do not mix them")
+        _check(
+            report["checks"],
+            "payments_total",
+            passed,
+            round(total),
+            EXPECTED_PAYMENTS,
+            "DIFFERENT from revenue — do not mix them",
+        )
         if "order_id" in tables["payments"].columns and "orders" in tables:
             unmatched_pay = int(
-                (~tables["payments"]["order_id"].isin(
-                    set(tables["orders"]["order_id"]))).sum())
-            _check(report["checks"], "payments_unmatched_to_orders",
-                   unmatched_pay == 0, unmatched_pay, 0)
+                (
+                    ~tables["payments"]["order_id"].isin(
+                        set(tables["orders"]["order_id"])
+                    )
+                ).sum()
+            )
+            _check(
+                report["checks"],
+                "payments_unmatched_to_orders",
+                unmatched_pay == 0,
+                unmatched_pay,
+                0,
+            )
 
     failed = [c for c in report["checks"] if c["status"] == "FAIL"]
     report["overall"] = "PASS" if not failed and ok else "FAIL"
@@ -255,38 +339,49 @@ def main():
         json.dump(report, f, indent=2, default=str)
 
     # Human-readable summary for the repo.
-    lines = ["# Step 2 — Data profile\n",
-             f"Generated: {report['generated_at']}  \n",
-             f"Overall: **{report['overall']}** "
-             f"({len(report['checks'])} checks, {len(failed)} failed)\n",
-             "Source: Kaggle Retail Data Warehouse "
-             "(datarspectrum), CSVs in `data/raw/` (not committed).\n",
-             "## Files found\n"]
+    lines = [
+        "# Step 2 — Data profile\n",
+        f"Generated: {report['generated_at']}  \n",
+        f"Overall: **{report['overall']}** "
+        f"({len(report['checks'])} checks, {len(failed)} failed)\n",
+        "Source: Kaggle Retail Data Warehouse "
+        "(datarspectrum), CSVs in `data/raw/` (not committed).\n",
+        "## Files found\n",
+    ]
     for name, s in report["files"].items():
-        lines.append(f"- **{name}**: {s['rows']:,} rows, "
-                     f"{s['column_count']} columns "
-                     f"({', '.join(s['columns'])}), "
-                     f"{s['null_total']:,} nulls, "
-                     f"{s['duplicate_full_rows']:,} duplicate rows")
+        lines.append(
+            f"- **{name}**: {s['rows']:,} rows, "
+            f"{s['column_count']} columns "
+            f"({', '.join(s['columns'])}), "
+            f"{s['null_total']:,} nulls, "
+            f"{s['duplicate_full_rows']:,} duplicate rows"
+        )
     lines.append("\n## Checks\n")
     for c in report["checks"]:
-        lines.append(f"- [{'PASS' if c['status'] == 'PASS' else 'FAIL'}] "
-                     f"**{c['check']}**: {c['actual']} "
-                     f"(expected {c['expected']})"
-                     + (f" — {c['note']}" if c['note'] else ""))
+        lines.append(
+            f"- [{'PASS' if c['status'] == 'PASS' else 'FAIL'}] "
+            f"**{c['check']}**: {c['actual']} "
+            f"(expected {c['expected']})" + (f" — {c['note']}" if c["note"] else "")
+        )
     lines.append("\n## Rules this profile enforces\n")
-    lines.append("- Revenue is always `qty * price` from order_items. "
-                 "Payments are a separate total, for reconciliation only.")
-    lines.append("- Any FAIL above must be investigated and recorded in "
-                 "docs/DESIGN.md before Step 3 loads the data — "
-                 "do not load around a failing check.")
+    lines.append(
+        "- Revenue is always `qty * price` from order_items. "
+        "Payments are a separate total, for reconciliation only."
+    )
+    lines.append(
+        "- Any FAIL above must be investigated and recorded in "
+        "docs/DESIGN.md before Step 3 loads the data — "
+        "do not load around a failing check."
+    )
     with open(MD_OUT, "w", encoding="utf-8") as f:
         f.write("\n".join(lines) + "\n")
 
     print(f"\nWrote {JSON_OUT}")
     print(f"Wrote {MD_OUT}")
-    print(f"\nPROFILE {'PASS' if report['overall'] == 'PASS' else 'FAIL'} "
-          f"— {len(failed)} check(s) failed")
+    print(
+        f"\nPROFILE {'PASS' if report['overall'] == 'PASS' else 'FAIL'} "
+        f"— {len(failed)} check(s) failed"
+    )
     return 0 if report["overall"] == "PASS" else 1
 
 

@@ -6,6 +6,8 @@
 
 ## Architecture
 
+![RetailPulse architecture](docs/images/architecture.png)
+
 ```mermaid
 flowchart LR
     K[Kaggle CSVs<br/>12 tables, ~1M rows] --> B[Bronze<br/>PostgreSQL, all TEXT]

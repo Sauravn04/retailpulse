@@ -18,6 +18,7 @@ What it does
 
 Needs: DATABASE_URL in .env, Postgres running, retailpulse DB created.
 """
+
 import csv
 import os
 import sys
@@ -66,7 +67,7 @@ def main() -> int:
                 with open(path, encoding="utf-8") as fh:
                     n_csv = sum(1 for _ in fh) - 1  # minus header row
                 cols = ", ".join(f"{_quote_ident(h)} TEXT" for h in headers)
-                cur.execute(f'DROP TABLE IF EXISTS bronze.{_quote_ident(table)}')
+                cur.execute(f"DROP TABLE IF EXISTS bronze.{_quote_ident(table)}")
                 cur.execute(
                     f"CREATE TABLE bronze.{_quote_ident(table)} "
                     f"({cols}, _source_file TEXT, _loaded_at TIMESTAMPTZ)"
@@ -87,14 +88,18 @@ def main() -> int:
                 cur.execute(f"SELECT count(*) FROM bronze.{_quote_ident(table)}")
                 n_db = cur.fetchone()[0]
                 status = "ok" if n_db == n_csv else "failed"
-                print(f"  {filename}: CSV {n_csv:,} rows -> bronze.{table} {n_db:,} rows [{status}]")
+                print(
+                    f"  {filename}: CSV {n_csv:,} rows -> bronze.{table} {n_db:,} rows [{status}]"
+                )
                 cur.execute(
                     "INSERT INTO pipeline_runs (stage, source_file, table_name, "
                     "rows_loaded, status) VALUES ('bronze', %s, %s, %s, %s)",
                     (filename, f"bronze.{table}", n_db, status),
                 )
                 if status == "failed":
-                    raise RuntimeError(f"Row-count mismatch for {filename}: {n_csv} vs {n_db}")
+                    raise RuntimeError(
+                        f"Row-count mismatch for {filename}: {n_csv} vs {n_db}"
+                    )
         conn.commit()
     except Exception as exc:
         conn.rollback()

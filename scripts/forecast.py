@@ -27,6 +27,7 @@ Needs: DATABASE_URL in .env, Postgres running, Step 3b done.
 Exit 0 = forecast written. There is no PASS/FAIL here — a bad
   MAPE is a finding, reported honestly, not a failed run.
 """
+
 import argparse
 import json
 import os
@@ -41,8 +42,7 @@ load_dotenv(os.path.join(ROOT, ".env"))
 
 HOLDOUT_DAYS = 30
 FORECAST_DAYS = 30
-FEATURES = ["lag_1", "lag_7", "lag_14", "lag_30",
-            "roll_7", "roll_30", "dow", "month"]
+FEATURES = ["lag_1", "lag_7", "lag_14", "lag_30", "roll_7", "roll_30", "dow", "month"]
 
 
 def load_daily(csv_path=None):
@@ -60,7 +60,10 @@ def load_daily(csv_path=None):
         try:
             df = pd.read_sql(
                 "SELECT order_date, revenue FROM gold.daily_sales "
-                "ORDER BY order_date", conn, parse_dates=["order_date"])
+                "ORDER BY order_date",
+                conn,
+                parse_dates=["order_date"],
+            )
         finally:
             conn.close()
     df = df.sort_values("order_date").reset_index(drop=True)
@@ -93,10 +96,9 @@ def metrics(y_true, y_pred):
     y_pred = np.asarray(y_pred, dtype=float)
     err = y_true - y_pred
     mae = float(np.mean(np.abs(err)))
-    rmse = float(np.sqrt(np.mean(err ** 2)))
+    rmse = float(np.sqrt(np.mean(err**2)))
     mape = float(np.mean(np.abs(err) / np.maximum(y_true, 1e-9)) * 100)
-    return {"mae": round(mae, 2), "rmse": round(rmse, 2),
-            "mape": round(mape, 2)}
+    return {"mae": round(mae, 2), "rmse": round(rmse, 2), "mape": round(mape, 2)}
 
 
 def main() -> int:
@@ -108,18 +110,24 @@ def main() -> int:
     from sklearn.preprocessing import StandardScaler
 
     ap = argparse.ArgumentParser()
-    ap.add_argument("--csv", default=None,
-                    help="Test only: read daily sales from this CSV "
-                    "instead of Postgres.")
+    ap.add_argument(
+        "--csv",
+        default=None,
+        help="Test only: read daily sales from this CSV " "instead of Postgres.",
+    )
     args = ap.parse_args()
 
     df = load_daily(args.csv)
-    print(f"Daily sales: {len(df):,} rows, "
-          f"{df['order_date'].min().date()} to "
-          f"{df['order_date'].max().date()}")
+    print(
+        f"Daily sales: {len(df):,} rows, "
+        f"{df['order_date'].min().date()} to "
+        f"{df['order_date'].max().date()}"
+    )
     if len(df) != 1462:
-        print(f"[WARN] expected 1,462 days, got {len(df):,} — "
-              "continuing, but check Step 3b.")
+        print(
+            f"[WARN] expected 1,462 days, got {len(df):,} — "
+            "continuing, but check Step 3b."
+        )
     gaps = df["order_date"].diff().dt.days.dropna()
     if (gaps != 1).any():
         print(f"[WARN] {(gaps != 1).sum()} missing day(s) in daily_sales.")
@@ -128,9 +136,11 @@ def main() -> int:
     # Time-based holdout: last 30 days are the test set.
     test = feat.tail(HOLDOUT_DAYS)
     train = feat.iloc[:-HOLDOUT_DAYS]
-    print(f"Train: {len(train):,} days to {train['order_date'].max().date()}, "
-          f"holdout: {len(test):,} days from "
-          f"{test['order_date'].min().date()}")
+    print(
+        f"Train: {len(train):,} days to {train['order_date'].max().date()}, "
+        f"holdout: {len(test):,} days from "
+        f"{test['order_date'].min().date()}"
+    )
 
     X_train = train[FEATURES].to_numpy()
     y_train = train["revenue"].to_numpy()
@@ -139,7 +149,8 @@ def main() -> int:
 
     models = {
         "random_forest": RandomForestRegressor(
-            n_estimators=200, random_state=42, n_jobs=-1),
+            n_estimators=200, random_state=42, n_jobs=-1
+        ),
         "ridge": make_pipeline(StandardScaler(), Ridge(alpha=1.0)),
         "rolling_mean_7": None,  # baseline, no fitting
     }
@@ -153,15 +164,18 @@ def main() -> int:
             pred = model.predict(X_test)
         results[name] = metrics(y_test, pred)
         m = results[name]
-        print(f"  {name}: MAE {m['mae']:,.0f}, RMSE {m['rmse']:,.0f}, "
-              f"MAPE {m['mape']:.2f}%")
+        print(
+            f"  {name}: MAE {m['mae']:,.0f}, RMSE {m['rmse']:,.0f}, "
+            f"MAPE {m['mape']:.2f}%"
+        )
 
     best = min(results, key=lambda k: results[k]["mape"])
-    print(f"\nBest on holdout (lowest MAPE): {best} "
-          f"({results[best]['mape']:.2f}%)")
+    print(f"\nBest on holdout (lowest MAPE): {best} " f"({results[best]['mape']:.2f}%)")
     if best == "rolling_mean_7":
-        print("The simple baseline beat both ML models on this holdout. "
-              "That is the honest result — the forecast below uses it.")
+        print(
+            "The simple baseline beat both ML models on this holdout. "
+            "That is the honest result — the forecast below uses it."
+        )
     best_rmse = results[best]["rmse"]
 
     # Refit the winner on ALL data, then forecast 30 days recursively.
@@ -178,8 +192,11 @@ def main() -> int:
     for i in range(FORECAST_DAYS):
         hist = np.asarray(history, dtype=float)
         row = {
-            "lag_1": hist[-1], "lag_7": hist[-7], "lag_14": hist[-14],
-            "lag_30": hist[-30], "roll_7": hist[-7:].mean(),
+            "lag_1": hist[-1],
+            "lag_7": hist[-7],
+            "lag_14": hist[-14],
+            "lag_30": hist[-30],
+            "roll_7": hist[-7:].mean(),
             "roll_30": hist[-30:].mean(),
             "dow": (last_date + pd.Timedelta(days=i + 1)).dayofweek,
             "month": (last_date + pd.Timedelta(days=i + 1)).month,
@@ -187,45 +204,52 @@ def main() -> int:
         if best == "rolling_mean_7":
             pred = float(row["roll_7"])
         else:
-            pred = float(model.predict(
-                np.array([[row[f] for f in FEATURES]]))[0])
+            pred = float(model.predict(np.array([[row[f] for f in FEATURES]]))[0])
         pred = max(pred, 0.0)
         history.append(pred)
         day = last_date + pd.Timedelta(days=i + 1)
-        forecasts.append({
-            "order_date": day.date().isoformat(),
-            "forecast": round(pred, 2),
-            "lower": round(max(pred - 1.96 * best_rmse, 0.0), 2),
-            "upper": round(pred + 1.96 * best_rmse, 2),
-            "model": best,
-        })
+        forecasts.append(
+            {
+                "order_date": day.date().isoformat(),
+                "forecast": round(pred, 2),
+                "lower": round(max(pred - 1.96 * best_rmse, 0.0), 2),
+                "upper": round(pred + 1.96 * best_rmse, 2),
+                "model": best,
+            }
+        )
 
     total = sum(f["forecast"] for f in forecasts)
-    print(f"\nForecast {forecasts[0]['order_date']} to "
-          f"{forecasts[-1]['order_date']} ({best}): "
-          f"total {total:,.0f}, mean {total / FORECAST_DAYS:,.0f}/day")
+    print(
+        f"\nForecast {forecasts[0]['order_date']} to "
+        f"{forecasts[-1]['order_date']} ({best}): "
+        f"total {total:,.0f}, mean {total / FORECAST_DAYS:,.0f}/day"
+    )
     print(f"Interval: +/- {1.96 * best_rmse:,.0f} (1.96 x holdout RMSE)")
 
     os.makedirs(os.path.join(ROOT, "data"), exist_ok=True)
-    with open(os.path.join(ROOT, "data", "forecast.csv"), "w",
-              newline="", encoding="utf-8") as f:
+    with open(
+        os.path.join(ROOT, "data", "forecast.csv"), "w", newline="", encoding="utf-8"
+    ) as f:
         import csv
 
-        w = csv.DictWriter(f, fieldnames=["order_date", "forecast",
-                                          "lower", "upper", "model"])
+        w = csv.DictWriter(
+            f, fieldnames=["order_date", "forecast", "lower", "upper", "model"]
+        )
         w.writeheader()
         w.writerows(forecasts)
-    payload = {"holdout_days": HOLDOUT_DAYS,
-               "holdout_from": str(test["order_date"].min().date()),
-               "holdout_to": str(test["order_date"].max().date()),
-               "models": results, "best_model": best,
-               "forecast_from": forecasts[0]["order_date"],
-               "forecast_to": forecasts[-1]["order_date"],
-               "forecast_total": round(total, 2),
-               "forecast_mean_daily": round(total / FORECAST_DAYS, 2),
-               "interval_half_width": round(1.96 * best_rmse, 2)}
-    with open(os.path.join(ROOT, "data", "forecast_metrics.json"),
-              "w") as f:
+    payload = {
+        "holdout_days": HOLDOUT_DAYS,
+        "holdout_from": str(test["order_date"].min().date()),
+        "holdout_to": str(test["order_date"].max().date()),
+        "models": results,
+        "best_model": best,
+        "forecast_from": forecasts[0]["order_date"],
+        "forecast_to": forecasts[-1]["order_date"],
+        "forecast_total": round(total, 2),
+        "forecast_mean_daily": round(total / FORECAST_DAYS, 2),
+        "interval_half_width": round(1.96 * best_rmse, 2),
+    }
+    with open(os.path.join(ROOT, "data", "forecast_metrics.json"), "w") as f:
         json.dump(payload, f, indent=2)
     print("Wrote data/forecast.csv and data/forecast_metrics.json")
 
@@ -240,13 +264,20 @@ def main() -> int:
                     "CREATE TABLE gold.forecast_daily ("
                     "order_date DATE PRIMARY KEY, forecast NUMERIC(14,2), "
                     "lower_bound NUMERIC(14,2), upper_bound NUMERIC(14,2), "
-                    "model TEXT)")
+                    "model TEXT)"
+                )
                 for f in forecasts:
                     cur.execute(
                         "INSERT INTO gold.forecast_daily VALUES "
                         "(%s, %s, %s, %s, %s)",
-                        (f["order_date"], f["forecast"], f["lower"],
-                         f["upper"], f["model"]))
+                        (
+                            f["order_date"],
+                            f["forecast"],
+                            f["lower"],
+                            f["upper"],
+                            f["model"],
+                        ),
+                    )
             conn.commit()
         finally:
             conn.close()

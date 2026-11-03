@@ -85,11 +85,18 @@ load_dotenv(os.path.join(ROOT, ".env"))
 EXPECTED_REVENUE = 3_827_746_136
 EXPECTED_PAYMENTS = 3_018_080_810
 EXPECTED_COUNTS = {
-    "categories": 30, "stores": 100, "products": 10_000,
-    "customers": 50_000, "orders": 300_000,
-    "order_items": 600_000, "payments": 300_000,
-    "employees": 1_000, "promotions": 50, "returns": 30_000,
-    "shipments": 300_000, "suppliers": 200,
+    "categories": 30,
+    "stores": 100,
+    "products": 10_000,
+    "customers": 50_000,
+    "orders": 300_000,
+    "order_items": 600_000,
+    "payments": 300_000,
+    "employees": 1_000,
+    "promotions": 50,
+    "returns": 30_000,
+    "shipments": 300_000,
+    "suppliers": 200,
 }
 # Join / measure columns Step 2 proved (profiler used these names
 # and its checks passed on the real data, 1 Nov 2026).
@@ -98,8 +105,7 @@ REQUIRED = {
     "stores": ["store_id"],
     "customers": ["customer_id"],
     "products": ["product_id", "category_id", "price"],
-    "orders": ["order_id", "customer_id", "store_id", "order_date",
-             "promotion_id"],
+    "orders": ["order_id", "customer_id", "store_id", "order_date", "promotion_id"],
     "order_items": ["order_item_id", "order_id", "product_id", "qty", "price"],
     "payments": ["payment_id", "order_id", "amount"],
 }
@@ -122,6 +128,7 @@ def _quote(name):
 
 def _connect(url):
     import psycopg2
+
     return psycopg2.connect(url)
 
 
@@ -195,8 +202,10 @@ def main() -> int:
                 mark = "ok" if n == expected else "MISMATCH"
                 print(f"  bronze.{table}: {n:,} rows (expected {expected:,}) [{mark}]")
                 if n != expected:
-                    print(f"[FAIL] Bronze incomplete for {table}. "
-                          "Rerun: python scripts/load_bronze.py")
+                    print(
+                        f"[FAIL] Bronze incomplete for {table}. "
+                        "Rerun: python scripts/load_bronze.py"
+                    )
                     return 1
 
             # --- 1. Discover bronze columns -------------------------------
@@ -208,10 +217,14 @@ def main() -> int:
                 print(f"  bronze.{table}: {actual}")
                 missing = [c for c in REQUIRED[table] if c not in actual]
                 if missing:
-                    print(f"[FAIL] bronze.{table} is missing required "
-                          f"column(s): {missing}")
-                    print("Paste the bronze column list above back to Muse "
-                          "— do not edit this script to guess the names.")
+                    print(
+                        f"[FAIL] bronze.{table} is missing required "
+                        f"column(s): {missing}"
+                    )
+                    print(
+                        "Paste the bronze column list above back to Muse "
+                        "— do not edit this script to guess the names."
+                    )
                     return 1
 
             # Descriptive columns, with alias fallback.
@@ -226,50 +239,70 @@ def main() -> int:
                     got = _pick(cols[table], name, table)
                     desc[(table, name)] = got
                     if got is None and name != "payment_date":
-                        print(f"[FAIL] bronze.{table}: no column found for "
-                              f"{name} (tried {ALIASES.get(name)})")
+                        print(
+                            f"[FAIL] bronze.{table}: no column found for "
+                            f"{name} (tried {ALIASES.get(name)})"
+                        )
                         return 1
             # products: optional supplier_id, carried as INT if present.
             prod_supplier = _pick(cols["products"], "supplier_id", "products")
 
             # Extra columns carried to Silver as TEXT (nothing dropped).
             def extras(table, used):
-                return [c for c in cols[table]
-                        if c not in used and c not in IGNORED_BRONZE_COLS]
+                return [
+                    c
+                    for c in cols[table]
+                    if c not in used and c not in IGNORED_BRONZE_COLS
+                ]
 
             used = {
-                "categories": set(REQUIRED["categories"]) | {desc[("categories", "category_name")]},
+                "categories": set(REQUIRED["categories"])
+                | {desc[("categories", "category_name")]},
                 "stores": set(REQUIRED["stores"]) | {desc[("stores", "city")]},
-                "customers": set(REQUIRED["customers"]) | {
-                    desc[("customers", "city")], desc[("customers", "signup_date")]},
-                "products": set(REQUIRED["products"]) | (
-                    {prod_supplier} if prod_supplier else set()),
+                "customers": set(REQUIRED["customers"])
+                | {desc[("customers", "city")], desc[("customers", "signup_date")]},
+                "products": set(REQUIRED["products"])
+                | ({prod_supplier} if prod_supplier else set()),
                 "orders": set(REQUIRED["orders"]),
                 "order_items": set(REQUIRED["order_items"]),
-                "payments": set(REQUIRED["payments"]) | (
+                "payments": set(REQUIRED["payments"])
+                | (
                     {desc[("payments", "payment_date")]}
-                    if desc[("payments", "payment_date")] else set()),
+                    if desc[("payments", "payment_date")]
+                    else set()
+                ),
             }
             extra_cols = {t: extras(t, used[t]) for t in REQUIRED}
             for t, ex in extra_cols.items():
                 if ex:
-                    print(f"  NOTE silver.{t}: extra bronze column(s) {ex} "
-                          "carried as TEXT — confirm what they mean, "
-                          "then type them properly in a later step.")
+                    print(
+                        f"  NOTE silver.{t}: extra bronze column(s) {ex} "
+                        "carried as TEXT — confirm what they mean, "
+                        "then type them properly in a later step."
+                    )
 
             def log(stage, table, rows, quarantined=0, status="ok", note=""):
                 cur.execute(
                     "INSERT INTO ops.pipeline_runs (stage, source_file, "
                     "table_name, rows_loaded, rows_quarantined, status, note) "
                     "VALUES (%s, %s, %s, %s, %s, %s, %s)",
-                    (stage, f"bronze.{table}", f"{stage}.{table}",
-                     rows, quarantined, status, note or None),
+                    (
+                        stage,
+                        f"bronze.{table}",
+                        f"{stage}.{table}",
+                        rows,
+                        quarantined,
+                        status,
+                        note or None,
+                    ),
                 )
 
             def count_quarantined(source):
                 cur.execute(
                     "SELECT count(*) FROM quarantine.bad_rows "
-                    "WHERE stage='silver' AND source_file=%s", (source,))
+                    "WHERE stage='silver' AND source_file=%s",
+                    (source,),
+                )
                 return cur.fetchone()[0]
 
             # --- 2. Silver ------------------------------------------------
@@ -306,13 +339,12 @@ def main() -> int:
                     (pk,),
                 )
                 cur.execute(f"DROP TABLE IF EXISTS silver.{table}")
-                cur.execute(
-                    f"CREATE TABLE silver.{table} AS {select_sql}")
+                cur.execute(f"CREATE TABLE silver.{table} AS {select_sql}")
                 # CREATE TABLE AS keeps no PK — add it now (the
                 # DISTINCT ON above guarantees uniqueness).
                 cur.execute(
-                    f"ALTER TABLE silver.{table} "
-                    f"ADD PRIMARY KEY ({_quote(pk)})")
+                    f"ALTER TABLE silver.{table} " f"ADD PRIMARY KEY ({_quote(pk)})"
+                )
                 cur.execute(f"SELECT count(*) FROM silver.{table}")
                 n = cur.fetchone()[0]
                 q = count_quarantined(f"bronze.{table}")
@@ -322,7 +354,8 @@ def main() -> int:
 
             # categories
             build_dim(
-                "categories", "category_id",
+                "categories",
+                "category_id",
                 f"SELECT DISTINCT ON (category_id::int) "
                 f"category_id::int AS category_id, "
                 f"{_quote(cat)} AS category_name "
@@ -333,7 +366,8 @@ def main() -> int:
             )
             # stores
             build_dim(
-                "stores", "store_id",
+                "stores",
+                "store_id",
                 f"SELECT DISTINCT ON (store_id::int) "
                 f"store_id::int AS store_id, "
                 f"{_quote(store_city)} AS city "
@@ -344,7 +378,8 @@ def main() -> int:
             )
             # customers
             build_dim(
-                "customers", "customer_id",
+                "customers",
+                "customer_id",
                 f"SELECT DISTINCT ON (customer_id::int) "
                 f"customer_id::int AS customer_id, "
                 f"{_quote(cust_city)} AS city, "
@@ -357,7 +392,8 @@ def main() -> int:
             # suppliers + promotions (dims, no FKs) — needed so
             # products.supplier_id and orders.promotion_id can be checked.
             build_dim(
-                "suppliers", "supplier_id",
+                "suppliers",
+                "supplier_id",
                 "SELECT DISTINCT ON (supplier_id::int) "
                 "supplier_id::int AS supplier_id, country AS country "
                 "FROM bronze.suppliers "
@@ -366,7 +402,8 @@ def main() -> int:
                 extra_cols.get("suppliers", []),
             )
             build_dim(
-                "promotions", "promotion_id",
+                "promotions",
+                "promotion_id",
                 "SELECT DISTINCT ON (promotion_id::int) "
                 "promotion_id::int AS promotion_id, "
                 "discount::numeric AS discount "
@@ -379,15 +416,13 @@ def main() -> int:
             # other extra bronze column carried as TEXT, like orders)
             sup_select = (
                 f", p.{_quote(prod_supplier)}::int AS supplier_id"
-                if prod_supplier else ""
+                if prod_supplier
+                else ""
             )
             sup_col = ", supplier_id INT" if prod_supplier else ""
-            prod_extra = [c for c in extra_cols["products"]
-                          if c != prod_supplier]
-            prod_extra_def = "".join(
-                f", {_quote(c)} TEXT" for c in prod_extra)
-            prod_extra_sel = "".join(
-                f", p.{_quote(c)}" for c in prod_extra)
+            prod_extra = [c for c in extra_cols["products"] if c != prod_supplier]
+            prod_extra_def = "".join(f", {_quote(c)} TEXT" for c in prod_extra)
+            prod_extra_sel = "".join(f", p.{_quote(c)}" for c in prod_extra)
             cur.execute("DROP TABLE IF EXISTS silver.products")
             cur.execute(
                 f"CREATE TABLE silver.products ("
@@ -472,12 +507,9 @@ def main() -> int:
             # not a TEXT extra. Unmatched promotion_ids are counted
             # and printed below, not quarantined, because 0 may mean
             # "no promotion" — that is a finding, not a load failure.
-            ord_extra = [c for c in extra_cols["orders"]
-                         if c != "promotion_id"]
-            ord_extra_def = "".join(
-                f", {_quote(c)} TEXT" for c in ord_extra)
-            ord_extra_sel = "".join(
-                f", o.{_quote(c)}" for c in ord_extra)
+            ord_extra = [c for c in extra_cols["orders"] if c != "promotion_id"]
+            ord_extra_def = "".join(f", {_quote(c)} TEXT" for c in ord_extra)
+            ord_extra_sel = "".join(f", o.{_quote(c)}" for c in ord_extra)
             cur.execute("DROP TABLE IF EXISTS silver.orders")
             cur.execute(
                 f"CREATE TABLE silver.orders ("
@@ -581,8 +613,7 @@ def main() -> int:
 
             # payments — reconciliation only, never joined into revenue.
             pay_date_sel = (
-                f", p.{_quote(pay_date)}::date AS payment_date"
-                if pay_date else ""
+                f", p.{_quote(pay_date)}::date AS payment_date" if pay_date else ""
             )
             pay_date_def = ", payment_date DATE" if pay_date else ""
             cur.execute("DROP TABLE IF EXISTS silver.payments")
@@ -697,37 +728,50 @@ def main() -> int:
                 "SELECT count(*) FROM silver.orders o "
                 "LEFT JOIN silver.promotions p "
                 "  ON p.promotion_id = o.promotion_id "
-                "WHERE o.promotion_id IS NOT NULL AND p.promotion_id IS NULL")
-            print(f"  orders with unmatched promotion_id: "
-                  f"{cur.fetchone()[0]:,} (reported, not quarantined)")
+                "WHERE o.promotion_id IS NOT NULL AND p.promotion_id IS NULL"
+            )
+            print(
+                f"  orders with unmatched promotion_id: "
+                f"{cur.fetchone()[0]:,} (reported, not quarantined)"
+            )
             cur.execute(
                 "SELECT count(*) FROM silver.products p "
                 "LEFT JOIN silver.suppliers s "
                 "  ON s.supplier_id = p.supplier_id "
-                "WHERE p.supplier_id IS NOT NULL AND s.supplier_id IS NULL")
-            print(f"  products with unmatched supplier_id: "
-                  f"{cur.fetchone()[0]:,} (reported, not quarantined)")
+                "WHERE p.supplier_id IS NOT NULL AND s.supplier_id IS NULL"
+            )
+            print(
+                f"  products with unmatched supplier_id: "
+                f"{cur.fetchone()[0]:,} (reported, not quarantined)"
+            )
 
             # Silver revenue + payments totals (the gate, part 1).
             cur.execute(
-                "SELECT COALESCE(SUM(qty * price), 0) "
-                "FROM silver.order_items")
+                "SELECT COALESCE(SUM(qty * price), 0) " "FROM silver.order_items"
+            )
             silver_revenue = cur.fetchone()[0]
-            cur.execute(
-                "SELECT COALESCE(SUM(amount), 0) FROM silver.payments")
+            cur.execute("SELECT COALESCE(SUM(amount), 0) FROM silver.payments")
             payments_total = cur.fetchone()[0]
-            print(f"\nSilver revenue (qty*price): {silver_revenue:,} "
-                  f"(expected {EXPECTED_REVENUE:,})")
-            print(f"Silver payments total: {payments_total:,} "
-                  f"(expected {EXPECTED_PAYMENTS:,})")
+            print(
+                f"\nSilver revenue (qty*price): {silver_revenue:,} "
+                f"(expected {EXPECTED_REVENUE:,})"
+            )
+            print(
+                f"Silver payments total: {payments_total:,} "
+                f"(expected {EXPECTED_PAYMENTS:,})"
+            )
             if silver_revenue != EXPECTED_REVENUE:
-                print("[FAIL] Silver revenue does not reconcile — "
-                      "Gold will NOT be built. Fix Silver first.")
+                print(
+                    "[FAIL] Silver revenue does not reconcile — "
+                    "Gold will NOT be built. Fix Silver first."
+                )
                 conn.rollback()
                 return 1
             if payments_total != EXPECTED_PAYMENTS:
-                print("[FAIL] Payments total does not reconcile — "
-                      "check silver.payments before building Gold.")
+                print(
+                    "[FAIL] Payments total does not reconcile — "
+                    "check silver.payments before building Gold."
+                )
                 conn.rollback()
                 return 1
 
@@ -744,9 +788,7 @@ def main() -> int:
                 "JOIN silver.order_items oi ON oi.order_id = o.order_id "
                 "GROUP BY o.order_date ORDER BY o.order_date"
             )
-            cur.execute(
-                "ALTER TABLE gold.daily_sales "
-                "ADD PRIMARY KEY (order_date)")
+            cur.execute("ALTER TABLE gold.daily_sales " "ADD PRIMARY KEY (order_date)")
             cur.execute("DROP TABLE IF EXISTS gold.daily_category_sales")
             cur.execute(
                 "CREATE TABLE gold.daily_category_sales AS "
@@ -760,7 +802,8 @@ def main() -> int:
             )
             cur.execute(
                 "ALTER TABLE gold.daily_category_sales "
-                "ADD PRIMARY KEY (order_date, category_id)")
+                "ADD PRIMARY KEY (order_date, category_id)"
+            )
             cur.execute("DROP TABLE IF EXISTS gold.daily_store_sales")
             cur.execute(
                 "CREATE TABLE gold.daily_store_sales AS "
@@ -773,7 +816,8 @@ def main() -> int:
             )
             cur.execute(
                 "ALTER TABLE gold.daily_store_sales "
-                "ADD PRIMARY KEY (order_date, store_id)")
+                "ADD PRIMARY KEY (order_date, store_id)"
+            )
             cur.execute("DROP TABLE IF EXISTS gold.monthly_sales")
             cur.execute(
                 "CREATE TABLE gold.monthly_sales AS "
@@ -782,11 +826,14 @@ def main() -> int:
                 "SUM(orders) AS orders "
                 "FROM gold.daily_sales GROUP BY 1 ORDER BY 1"
             )
-            cur.execute(
-                "ALTER TABLE gold.monthly_sales ADD PRIMARY KEY (month)")
+            cur.execute("ALTER TABLE gold.monthly_sales ADD PRIMARY KEY (month)")
 
-            for table in ("daily_sales", "daily_category_sales",
-                          "daily_store_sales", "monthly_sales"):
+            for table in (
+                "daily_sales",
+                "daily_category_sales",
+                "daily_store_sales",
+                "monthly_sales",
+            ):
                 cur.execute(f"SELECT count(*) FROM gold.{table}")
                 n = cur.fetchone()[0]
                 log("gold", table, n)
@@ -795,46 +842,64 @@ def main() -> int:
             # Indexes after the load.
             cur.execute(
                 "CREATE INDEX IF NOT EXISTS idx_silver_orders_date "
-                "ON silver.orders (order_date)")
+                "ON silver.orders (order_date)"
+            )
             cur.execute(
                 "CREATE INDEX IF NOT EXISTS idx_silver_items_order "
-                "ON silver.order_items (order_id)")
+                "ON silver.order_items (order_id)"
+            )
             cur.execute(
                 "CREATE INDEX IF NOT EXISTS idx_silver_items_product "
-                "ON silver.order_items (product_id)")
+                "ON silver.order_items (product_id)"
+            )
             cur.execute(
                 "CREATE INDEX IF NOT EXISTS idx_gold_daily_cat "
-                "ON gold.daily_category_sales (category_id, order_date)")
+                "ON gold.daily_category_sales (category_id, order_date)"
+            )
             cur.execute(
                 "CREATE INDEX IF NOT EXISTS idx_gold_daily_store "
-                "ON gold.daily_store_sales (store_id, order_date)")
+                "ON gold.daily_store_sales (store_id, order_date)"
+            )
 
             # --- 4. Reconciliation gate (Gold) ----------------------------
             print("\nReconciliation gate:")
             totals = {}
-            for table in ("daily_sales", "daily_category_sales",
-                          "daily_store_sales", "monthly_sales"):
+            for table in (
+                "daily_sales",
+                "daily_category_sales",
+                "daily_store_sales",
+                "monthly_sales",
+            ):
                 cur.execute(f"SELECT SUM(revenue) FROM gold.{table}")
                 totals[table] = cur.fetchone()[0]
                 mark = "ok" if totals[table] == EXPECTED_REVENUE else "FAIL"
                 print(f"  gold.{table} revenue: {totals[table]:,} [{mark}]")
-            cur.execute("SELECT count(*) FROM quarantine.bad_rows "
-                        "WHERE stage='silver'")
+            cur.execute(
+                "SELECT count(*) FROM quarantine.bad_rows " "WHERE stage='silver'"
+            )
             total_q = cur.fetchone()[0]
-            print(f"  Total quarantined in Silver: {total_q:,} "
-                  "(expected 0 on this dataset)")
+            print(
+                f"  Total quarantined in Silver: {total_q:,} "
+                "(expected 0 on this dataset)"
+            )
             ok = all(v == EXPECTED_REVENUE for v in totals.values())
             if not ok:
-                print("[FAIL] Gold totals do not reconcile to "
-                      f"{EXPECTED_REVENUE:,}. Do not use Gold yet.")
+                print(
+                    "[FAIL] Gold totals do not reconcile to "
+                    f"{EXPECTED_REVENUE:,}. Do not use Gold yet."
+                )
                 conn.rollback()
                 return 1
             conn.commit()
-            print("\nSilver + Gold OK — revenue reconciles to "
-                  f"{EXPECTED_REVENUE:,} in every mart.")
+            print(
+                "\nSilver + Gold OK — revenue reconciles to "
+                f"{EXPECTED_REVENUE:,} in every mart."
+            )
             print("Next: Step 4 SQL analytics (window functions, RFM).")
-            print("If any extra bronze column was noted above, paste "
-                  "that line back so it can be typed properly.")
+            print(
+                "If any extra bronze column was noted above, paste "
+                "that line back so it can be typed properly."
+            )
             return 0
     except Exception as exc:
         try:

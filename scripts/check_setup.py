@@ -6,6 +6,7 @@ PostgreSQL reachability from DATABASE_URL in .env.
 Postgres DOWN is a warning in Step 1, not a failure — Step 3 needs it.
 Exit 0 if core checks pass, 1 if Python/packages/Git fail.
 """
+
 import os
 import shutil
 import sys
@@ -36,21 +37,27 @@ def main():
             __import__(pkg)
             print(f"[PASS] package: {pkg}")
         except ImportError:
-            print(f"[FAIL] package missing: {pkg} — run: pip install -r requirements.txt")
+            print(
+                f"[FAIL] package missing: {pkg} — run: pip install -r requirements.txt"
+            )
             ok = False
 
     # Postgres: try only if a DATABASE_URL is configured.
     try:
         from dotenv import load_dotenv
+
         load_dotenv(os.path.join(ROOT, ".env"))
     except Exception:
         pass
     url = os.getenv("DATABASE_URL", "")
     if not url:
-        print("[WARN] DATABASE_URL not set — copy .env.example to .env (Step 3 needs Postgres)")
+        print(
+            "[WARN] DATABASE_URL not set — copy .env.example to .env (Step 3 needs Postgres)"
+        )
     else:
         try:
             from sqlalchemy import create_engine, text
+
             eng = create_engine(url, connect_args={"connect_timeout": 3})
             with eng.connect() as conn:
                 conn.execute(text("SELECT 1"))
