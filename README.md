@@ -75,11 +75,11 @@ Add the following PNG screenshots under `docs/images/` to display the dashboard 
 
 Once the image files are present, you can embed them here:
 
-```markdown
+
 ![Full RetailPulse dashboard](docs/images/dashboard-full.png)
 ![January 2024 revenue forecast](docs/images/dashboard-forecast.png)
 ![Category performance and RFM segmentation](docs/images/dashboard-categories-rfm.png)
-```
+
 
 For details about the report and its visuals, see [`docs/BI_DASHBOARD.md`](docs/BI_DASHBOARD.md).
 
